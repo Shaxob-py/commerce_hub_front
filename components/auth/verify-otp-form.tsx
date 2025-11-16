@@ -1,32 +1,34 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
+import { useAuth } from "@/lib/auth-context"
+import { apiClient } from "@/lib/api-client"
 
 export default function VerifyOtpForm() {
+  const router = useRouter()
+  const { login } = useAuth()
   const searchParams = useSearchParams()
   const email = searchParams.get("email") || ""
 
   const [otp, setOtp] = useState(["", "", "", "", "", ""])
   const [loading, setLoading] = useState(false)
+  const [resendLoading, setResendLoading] = useState(false)
   const [error, setError] = useState("")
 
   const handleOtpChange = (value: string, index: number) => {
+    const cleaned = value.replace(/\D/g, "")
     const newOtp = [...otp]
-    newOtp[index] = value.slice(-1)
+    newOtp[index] = cleaned.slice(-1)
     setOtp(newOtp)
 
-    // Auto-focus next input
-    if (value && index < 5) {
-      const nextInput = document.getElementById(`otp-${index + 1}`)
-      nextInput?.focus()
+    if (cleaned && index < 5) {
+      document.getElementById(`otp-${index + 1}`)?.focus()
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setError("")
     setLoading(true)
@@ -39,12 +41,33 @@ export default function VerifyOtpForm() {
     }
 
     try {
-      // TODO: Implement API call to verify OTP
-      console.log("Verify OTP:", { email, otp: otpCode })
+      const response = await apiClient.post("/auth/verification-email", {
+        email,
+        code: otpCode,
+      })
+
+      if (response.access_token) {
+        login(response.access_token, response.refresh_token)
+        router.push("/products")
+      }
     } catch (err) {
-      setError("Invalid OTP. Please try again.")
+      setError(err.response?.data?.detail || "Invalid OTP")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleResendOtp = async () => {
+    setError("")
+    setResendLoading(true)
+
+    try {
+      await apiClient.post("/auth/login", { email })
+      setOtp(["", "", "", "", "", ""])
+    } catch (err) {
+      setError(err.response?.data?.detail || "Failed to resend code")
+    } finally {
+      setResendLoading(false)
     }
   }
 
@@ -58,22 +81,22 @@ export default function VerifyOtpForm() {
       <div>
         <label className="block text-sm font-medium mb-4">Enter OTP</label>
         <div className="flex gap-2 justify-center">
-          {otp.map((digit, index) => (
+          {otp.map((digit, i) => (
             <input
-              key={index}
-              id={`otp-${index}`}
+              key={i}
+              id={`otp-${i}`}
               type="text"
               inputMode="numeric"
               maxLength={1}
               value={digit}
-              onChange={(e) => handleOtpChange(e.target.value, index)}
-              className="w-12 h-12 text-center text-lg font-semibold bg-secondary text-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              onChange={(e) => handleOtpChange(e.target.value, i)}
+              className="w-12 h-12 text-center text-lg font-semibold bg-secondary border rounded-lg"
             />
           ))}
         </div>
       </div>
 
-      {error && <div className="text-destructive text-sm text-center">{error}</div>}
+      {error && <p className="text-destructive text-center text-sm">{error}</p>}
 
       <button type="submit" disabled={loading} className="auth-button">
         {loading ? "Verifying..." : "Verify"}
@@ -81,15 +104,17 @@ export default function VerifyOtpForm() {
 
       <div className="text-center space-y-2">
         <p className="text-sm text-muted-foreground">Didn't receive code?</p>
-        <button type="button" className="text-primary hover:text-accent transition-colors text-sm font-medium">
-          Resend OTP
+        <button
+          type="button"
+          onClick={handleResendOtp}
+          disabled={resendLoading}
+          className="text-primary text-sm"
+        >
+          {resendLoading ? "Resending..." : "Resend OTP"}
         </button>
       </div>
 
-      <Link
-        href="/auth/login"
-        className="block text-center text-muted-foreground hover:text-foreground transition-colors text-sm"
-      >
+      <Link href="/auth/login" className="block text-center text-sm text-muted-foreground">
         Back to login
       </Link>
     </form>

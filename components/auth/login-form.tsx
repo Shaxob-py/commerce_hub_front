@@ -1,9 +1,9 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import Link from "next/link"
+import { apiClient } from "@/lib/api-client"
 
 export default function LoginForm() {
   const [email, setEmail] = useState("")
@@ -17,11 +17,12 @@ export default function LoginForm() {
     setLoading(true)
 
     try {
-      // TODO: Implement API call to send OTP
-      console.log("Send OTP to:", email)
+      await apiClient.post("/auth/login", {
+        email,
+      })
       setOtpSent(true)
     } catch (err) {
-      setError("Failed to send OTP. Please try again.")
+      setError(err instanceof Error ? err.message : "Failed to send OTP. Please try again.")
     } finally {
       setLoading(false)
     }

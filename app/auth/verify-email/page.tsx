@@ -4,8 +4,13 @@ import type React from "react"
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from 'next/navigation'
+import { useAuth } from "@/lib/auth-context"
+import { apiClient } from "@/lib/api-client"
 
 export default function VerifyEmailPage() {
+  const router = useRouter()
+  const { login } = useAuth()
   const [email, setEmail] = useState("")
   const [otp, setOtp] = useState(["", "", "", "", "", ""])
   const [loading, setLoading] = useState(false)
@@ -28,10 +33,17 @@ export default function VerifyEmailPage() {
     setLoading(true)
 
     try {
-      // TODO: Implement API call to verify email
-      console.log("Verify email:", { email, otp: otp.join("") })
+      const response = await apiClient.post("/auth/verification-email", {
+        email,
+        code: otp.join(""),
+      })
+
+      if (response.access_token && response.refresh_token) {
+        login(response.access_token, response.refresh_token)
+        router.push("/products")
+      }
     } catch (err) {
-      setError("Verification failed. Please try again.")
+      setError(err instanceof Error ? err.message : "Verification failed. Please try again.")
     } finally {
       setLoading(false)
     }

@@ -4,8 +4,11 @@ import type React from "react"
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from 'next/navigation'
+import { apiClient } from "@/lib/api-client"
 
 export default function RegisterForm() {
+  const router = useRouter()
   const [email, setEmail] = useState("")
   const [fullName, setFullName] = useState("")
   const [loading, setLoading] = useState(false)
@@ -18,11 +21,19 @@ export default function RegisterForm() {
     setLoading(true)
 
     try {
-      // TODO: Implement API call to register user
-      console.log("Register:", { email, fullName })
+      await apiClient.post("/auth/register", {
+        email,
+        username: fullName,
+      })
+
+      // 👉 Сохраняем email для verify-email страницы
+      if (typeof window !== "undefined") {
+        localStorage.setItem("verify_email", email)
+      }
+
       setSuccess(true)
     } catch (err) {
-      setError("Registration failed. Please try again.")
+      setError(err instanceof Error ? err.message : "Registration failed. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -31,11 +42,23 @@ export default function RegisterForm() {
   if (success) {
     return (
       <div className="text-center space-y-4">
-        <div className="text-green-400 text-lg font-medium">Check your email for verification code</div>
-        <p className="text-muted-foreground">We sent a verification code to {email}</p>
-        <Link href="/auth/verify-email" className="auth-link inline-block mt-4">
+        <div className="text-green-400 text-lg font-medium">
+          Check your email for verification code
+        </div>
+
+        <p className="text-muted-foreground">
+          We sent a verification code to {email}
+        </p>
+
+        <button
+          onClick={() => {
+            setSuccess(false)
+            router.push(`/auth/verify?email=${email}`)
+          }}
+          className="auth-link inline-block mt-4"
+        >
           Verify now
-        </Link>
+        </button>
       </div>
     )
   }
