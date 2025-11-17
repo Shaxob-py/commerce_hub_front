@@ -1,60 +1,59 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import SellerStats from "@/components/profile/seller-stats"
 import UserProducts from "@/components/profile/user-products"
-
-// Mock user data
-const MOCK_USER = {
-  id: "1",
-  name: "John Doe",
-  email: "john@example.com",
-  phone: "+1234567890",
-  avatar: "/placeholder.svg?key=profile",
-  bio: "Professional seller with 5+ years of experience. Fast shipping and quality products guaranteed!",
-  joinDate: "January 2023",
-  totalSales: 15430,
-  totalProducts: 24,
-  rating: 4.8,
-  reviews: 156,
-}
-
-const MOCK_PRODUCTS = [
-  {
-    id: "1",
-    title: "Wireless Headphones",
-    price: 79.99,
-    image: "/wireless-headphones.png",
-    category: "Electronics",
-    views: 234,
-    active: true,
-  },
-  {
-    id: "2",
-    title: "Classic T-Shirt",
-    price: 29.99,
-    image: "/classic-tshirt.png",
-    category: "Clothing",
-    views: 156,
-    active: true,
-  },
-  {
-    id: "3",
-    title: "Programming Book",
-    price: 49.99,
-    image: "/programming-book.png",
-    category: "Books",
-    views: 89,
-    active: false,
-  },
-]
+import { getMe } from "@/lib/api"
 
 export default function ProfilePage() {
-  const [user, setUser] = useState(MOCK_USER)
+  const [user, setUser] = useState<any>(null)
   const [isEditingBio, setIsEditingBio] = useState(false)
-  const [bio, setBio] = useState(user.bio)
+  const [bio, setBio] = useState("")
+
+  // ============================
+  // LOAD REAL USER FROM BACKEND
+  // ============================
+  useEffect(() => {
+    async function loadUser() {
+      try {
+        const response = await getMe() // GET /api/v1/users/me
+
+        if (response?.data) {
+          const u = response.data
+
+          setUser({
+            name: u.username,
+            email: u.email,
+            avatar: null,
+            phone: "Not set",
+            bio: "",
+            joinDate: "2025",
+            totalSales: 0,
+            totalProducts: 0,
+            rating: 0,
+            reviews: 0,
+          })
+
+          setBio("")
+        }
+      } catch (e) {
+        console.error("Failed to load user:", e)
+      }
+    }
+
+    loadUser()
+  }, [])
+
+
+  if (!user) {
+    return (
+      <main className="min-h-screen flex items-center justify-center text-foreground">
+        Loading…
+      </main>
+    )
+  }
 
   const handleSaveBio = () => {
     setUser({ ...user, bio })
@@ -73,7 +72,9 @@ export default function ProfilePage() {
             <Link href="/products" className="text-primary hover:text-accent transition-colors">
               Browse
             </Link>
-            <button className="text-muted-foreground hover:text-foreground transition-colors">Logout</button>
+            <button className="text-muted-foreground hover:text-foreground transition-colors">
+              Logout
+            </button>
           </div>
         </div>
       </nav>
@@ -163,7 +164,7 @@ export default function ProfilePage() {
 
         {/* Products Section */}
         <div className="mt-12">
-          <UserProducts products={MOCK_PRODUCTS} />
+          <UserProducts products={[]} />
         </div>
 
         {/* Account Settings Section */}

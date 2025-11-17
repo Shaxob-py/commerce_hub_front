@@ -1,112 +1,101 @@
-"use client"
+"use client";
 
-import type React from "react"
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 
-import { useState } from "react"
-import Link from "next/link"
-import { useRouter } from 'next/navigation'
-import { apiClient } from "@/lib/api-client"
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function RegisterForm() {
-  const router = useRouter()
-  const [email, setEmail] = useState("")
-  const [fullName, setFullName] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [success, setSuccess] = useState(false)
+  const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setLoading(true)
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
 
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (!email || !username) {
+      setError("Заполните все поля.");
+      return;
+    }
+
+    setLoading(true);
     try {
-      await apiClient.post("/auth/register", {
-        email,
-        username: fullName,
-      })
+      const resp = await fetch(`${API_BASE}/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          username,
+        }),
+      });
 
-      // 👉 Сохраняем email для verify-email страницы
-      if (typeof window !== "undefined") {
-        localStorage.setItem("verify_email", email)
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        const message =
+          data?.detail || data?.message || JSON.stringify(data);
+        setError(String(message));
+        setLoading(false);
+        return;
       }
 
-      setSuccess(true)
+      // ✔️ Сохраняем email для verify
+      localStorage.setItem("verify_email", email);
+
+      // ✔️ Переход на страницу ввода OTP
+      router.push("/auth/verify-email");
+
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed. Please try again.")
+      console.error(err);
+      setError("Ошибка сети. Попробуйте снова.");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
-  if (success) {
-    return (
-      <div className="text-center space-y-4">
-        <div className="text-green-400 text-lg font-medium">
-          Check your email for verification code
-        </div>
-
-        <p className="text-muted-foreground">
-          We sent a verification code to {email}
-        </p>
-
-        <button
-          onClick={() => {
-            setSuccess(false)
-            router.push(`/auth/verify?email=${email}`)
-          }}
-          className="auth-link inline-block mt-4"
-        >
-          Verify now
-        </button>
-      </div>
-    )
-  }
-
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label htmlFor="fullName" className="block text-sm font-medium mb-2">
-          Full Name
-        </label>
-        <input
-          id="fullName"
-          type="text"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          placeholder="John Doe"
-          className="auth-input"
-          required
-        />
-      </div>
+    <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
 
       <div>
-        <label htmlFor="email" className="block text-sm font-medium mb-2">
-          Email Address
-        </label>
+        <label className="block text-sm font-medium">Email</label>
         <input
-          id="email"
           type="email"
+          className="mt-1 w-full border rounded px-3 py-2"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="auth-input"
           required
         />
       </div>
 
-      {error && <div className="text-destructive text-sm">{error}</div>}
+      <div>
+        <label className="block text-sm font-medium">Username</label>
+        <input
+          type="text"
+          className="mt-1 w-full border rounded px-3 py-2"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="shaxob"
+          required
+        />
+      </div>
 
-      <button type="submit" disabled={loading} className="auth-button">
-        {loading ? "Creating account..." : "Create Account"}
+      {error && <p className="text-red-600 text-sm">{error}</p>}
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-60"
+      >
+        {loading ? "Отправка..." : "Зарегистрироваться"}
       </button>
-
-      <p className="text-center text-sm text-muted-foreground">
-        Already have an account?{" "}
-        <Link href="/auth/login" className="auth-link font-medium">
-          Sign in
-        </Link>
-      </p>
     </form>
-  )
+  );
 }

@@ -1,75 +1,80 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
-import Link from "next/link"
-import { useAuth } from "@/lib/auth-context"
-import { apiClient } from "@/lib/api-client"
+import React, { useEffect, useState } from "react";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 export default function VerifyOtpForm() {
-  const router = useRouter()
-  const { login } = useAuth()
-  const searchParams = useSearchParams()
-  const email = searchParams.get("email") || ""
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const [otp, setOtp] = useState(["", "", "", "", "", ""])
-  const [loading, setLoading] = useState(false)
-  const [resendLoading, setResendLoading] = useState(false)
-  const [error, setError] = useState("")
+  useEffect(() => {
+    const savedEmail = localStorage.getItem("verify_email");
+    if (savedEmail) setEmail(savedEmail);
+  }, []);
 
   const handleOtpChange = (value: string, index: number) => {
-    const cleaned = value.replace(/\D/g, "")
-    const newOtp = [...otp]
-    newOtp[index] = cleaned.slice(-1)
-    setOtp(newOtp)
+    const newOtp = [...otp];
+    newOtp[index] = value.slice(-1);
+    setOtp(newOtp);
 
-    if (cleaned && index < 5) {
-      document.getElementById(`otp-${index + 1}`)?.focus()
+    if (value && index < 5) {
+      const nextInput = document.getElementById(`otp-${index + 1}`);
+      nextInput?.focus();
     }
-  }
+  };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError("")
-    setLoading(true)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-    const otpCode = otp.join("")
+    const otpCode = otp.join("");
+
     if (otpCode.length !== 6) {
-      setError("Please enter all 6 digits")
-      setLoading(false)
-      return
+      setError("Введите все 6 цифр.");
+      setLoading(false);
+      return;
     }
 
     try {
-      const response = await apiClient.post("/auth/verification-email", {
-        email,
-        code: otpCode,
-      })
+      const resp = await fetch(`${API_BASE}/auth/verification-email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          code: otpCode,
+        }),
+      });
 
-      if (response.access_token) {
-        login(response.access_token, response.refresh_token)
-        router.push("/products")
-      }
-    } catch (err) {
-      setError(err.response?.data?.detail || "Invalid OTP")
-    } finally {
-      setLoading(false)
+      const data = await resp.json();
+
+      if (!resp.ok) {
+          setError(data.detail || "Verification failed");
+      setLoading(false);
+      return;
     }
-  }
 
-  const handleResendOtp = async () => {
-    setError("")
-    setResendLoading(true)
+    localStorage.setItem("access_token", data.access_token);
+    localStorage.setItem("refresh_token", data.refresh_token);
 
-    try {
-      await apiClient.post("/auth/login", { email })
-      setOtp(["", "", "", "", "", ""])
+    // 👉 удаляем временный email
+    localStorage.removeItem("verify_email");
+
+      alert("Email успешно подтверждён!");
+
+      window.location.href = "/products";
+
     } catch (err) {
-      setError(err.response?.data?.detail || "Failed to resend code")
+      console.error(err);
+      setError("Ошибка сети.");
     } finally {
-      setResendLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -81,42 +86,26 @@ export default function VerifyOtpForm() {
       <div>
         <label className="block text-sm font-medium mb-4">Enter OTP</label>
         <div className="flex gap-2 justify-center">
-          {otp.map((digit, i) => (
+          {otp.map((digit, index) => (
             <input
-              key={i}
-              id={`otp-${i}`}
+              key={index}
+              id={`otp-${index}`}
               type="text"
               inputMode="numeric"
               maxLength={1}
               value={digit}
-              onChange={(e) => handleOtpChange(e.target.value, i)}
-              className="w-12 h-12 text-center text-lg font-semibold bg-secondary border rounded-lg"
+              onChange={(e) => handleOtpChange(e.target.value, index)}
+              className="w-12 h-12 text-center text-lg font-semibold bg-secondary text-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
             />
           ))}
         </div>
       </div>
 
-      {error && <p className="text-destructive text-center text-sm">{error}</p>}
+      {error && <div className="text-destructive text-sm text-center">{error}</div>}
 
       <button type="submit" disabled={loading} className="auth-button">
         {loading ? "Verifying..." : "Verify"}
       </button>
-
-      <div className="text-center space-y-2">
-        <p className="text-sm text-muted-foreground">Didn't receive code?</p>
-        <button
-          type="button"
-          onClick={handleResendOtp}
-          disabled={resendLoading}
-          className="text-primary text-sm"
-        >
-          {resendLoading ? "Resending..." : "Resend OTP"}
-        </button>
-      </div>
-
-      <Link href="/auth/login" className="block text-center text-sm text-muted-foreground">
-        Back to login
-      </Link>
     </form>
-  )
+  );
 }
